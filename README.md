@@ -98,4 +98,3 @@ You can include, but are not limited to, the following models:
 - Orders Model: A model that keeps records of orders (e.g., order_id, client_id, product_id, status, etc.).
 
 Feel free to extend or create additional models that you think would benefit Duff Beer Inc. in analyzing their sales and order data.
-
