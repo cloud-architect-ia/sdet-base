@@ -1,0 +1,11 @@
+click
+boto3
+python-dotenv
+
+[dev]
+pytest
+moto
+black
+isort
+flake8
+mypy

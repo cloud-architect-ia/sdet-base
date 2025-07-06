@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: sdet-base
+Version: 0.1.0
+Summary: CLI Python para la prueba técnica SDET usando AWS
+Author: junior.millan
+License: MIT
+Provides-Extra: dev
+License-File: LICENSE

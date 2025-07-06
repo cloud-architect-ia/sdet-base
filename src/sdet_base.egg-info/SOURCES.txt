@@ -1,0 +1,12 @@
+LICENSE
+README.md
+setup.py
+src/sdet_base/__init__.py
+src/sdet_base/cli.py
+src/sdet_base/config.py
+src/sdet_base/utils.py
+src/sdet_base.egg-info/PKG-INFO
+src/sdet_base.egg-info/SOURCES.txt
+src/sdet_base.egg-info/dependency_links.txt
+src/sdet_base.egg-info/requires.txt
+src/sdet_base.egg-info/top_level.txt
