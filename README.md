@@ -1,100 +1,130 @@
-### **Assignment Story: Duff Beer Inc.**
+# Duff Beer Inc. ETL Pipeline
 
-**Company Background:**
-Duff Beer Inc. is a well-known beverage company that specializes in selling different beer products. They have a growing network of point-of-sale channels including direct sales to retailers, online orders, and B2B partnerships. As their sales increase, Duff Beer Inc. needs a robust system to track and analyze their order data in real-time. They are currently facing difficulties in processing their large volumes of order data and want to automate this using AWS services.
+Este repositorio contiene la solución completa para la prueba técnica de Duff Beer Inc., que incluye:
 
-Your task is to help Duff Beer Inc. by building an ETL pipeline to process their orders, summarize them, and expose a report through an API.
-
----
-
-### **Sample CSV File: Orders Data**
-
-Here is a sample structure of the CSV file that Duff Beer Inc. will upload to S3:
-
-| client_id | client_name | order_id | product_id | product_description | product_price | product_ccf | product_volume | point_of_sale_channel | status    |
-|-----------|-------------|----------|------------|----------------------|---------------|----------------|-------------|-----------------------|-----------|
-| 1001      | Moe's Tavern| 5678     | 102        | Duff Classic          | 2.50          | 6              | 0.33        | Retail                | created   |
-| 1002      | Kwik-E-Mart | 5679     | 103        | Duff Lite             | 2.00          | 12             | 0.5         | B2B                   | delivered |
-| 1003      | Krusty Burger| 5680     | 104        | Duff Dry              | 3.00          | 8              | 0.25        | Online                | broken    |
-| 1004      | Springfield Mall| 5681  | 105        | Duff Special          | 4.00          | 24             | 1.00        | Retail                | created   |
-| 1005      | Moe's Tavern| 5682     | 102        | Duff Classic          | 2.50          | 6              | 0.33        | B2B                   | delivered |
-
-- **client_id**: The ID of the client placing the order.
-- **client_name**: The name of the client.
-- **order_id**: Unique ID for the order.
-- **product_id**: Unique ID for the product.
-- **product_description**: Name or description of the product ordered.
-- **product_price**: Price of the product per unit.
-- **product_ccf**: Number of units ordered.
-- **product_volume**: Volume per unit (in liters or specific measure).
-- **point_of_sale_channel**: Channel through which the order was placed (e.g., Retail, Online, B2B).
-- **status**: The current status of the order. Possible values are:
-  - `created`: Order has been created.
-  - `delivered`: Order has been successfully delivered.
-  - `broken`: The order was damaged or had issues during delivery.
+- Infraestructura como código (Terraform) para S3, IAM, Glue y API Gateway  
+- Script PySpark para AWS Glue (`transform.py`)  
+- Ejecución de ETL: CSV → Parquet particionado  
+- Consulta en Athena  
+- API REST en API Gateway + Lambda para exponer datos  
+- Pre-commit, tests y entorno Python modular
 
 ---
 
-### **ETL Pipeline Challenge**:
-Your task is to set up an automated ETL pipeline to process Duff Beer Inc.'s order data. The pipeline should be fully serverless, utilizing AWS services to extract, transform, and load the data. Below are the steps and expectations:
+##  Contenido
 
-Data Ingestion:
+```plaintext
+sdet-base/
+├─ infra/terraform/       # Terraform para S3, IAM, Glue Job y API Gateway
+│   ├─ main.tf
+│   ├─ variables.tf
+│   ├─ outputs.tf
+│   └─ api/               # Módulo Terraform para Lambda + API GW
+├─ glue-scripts/
+│   └─ transform.py       # ETL PySpark para Glue
+├─ lambda/
+│   ├─ handler.py         # Lambda Python para API
+│   └─ build.sh           # Script de empaquetado
+├─ data/
+│   └─ orders.csv         # CSV de ejemplo
+├─ src/                   # Código Python del CLI / librerías
+├─ tests/                 # Tests con pytest
+├─ .pre-commit-config.yaml# Hooks para lint, fmt, seguridad
+├─ .gitignore
+├─ setup.py               # Configuración del paquete Python
+└─ README.md              # Este fichero
 
-The pipeline begins when a CSV file containing order data is uploaded to an S3 bucket. This file serves as the input to your ETL process.
 
-Event Trigger:
+---
 
-Set up an event notification that triggers an ETL process as soon as the CSV file is uploaded. This event should invoke AWS services to process the data.
+##  Uso completo (end-to-end)
 
-ETL Process:
+Estos pasos cubren desde clonar el repo hasta desplegar infra, ejecutar ETL y probar la API REST.
 
-The ETL process can be designed using:
+```bash
+# 1. Clonar y entrar en el proyecto
+git clone https://github.com/cloud-architect-ia/sdet-base.git
+cd sdet-base
 
-**AWS Step Functions**, which can orchestrate multiple tasks in a sequential or parallel flow.
-**Lambda Functions** for data processing and transformation (e.g., reading the CSV, aggregating data, and performing calculations).
-**AWS Glue Jobs**, if you opt for a more scalable ETL tool (Glue is optional but encouraged if appropriate for your solution).
+# 2. Preparar entorno Python
+python -m venv .venv
+# Linux / Mac
+source .venv/bin/activate
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
-The ETL process should:
+# 3. Configurar credenciales AWS
+cat > .env <<EOF
+AWS_ACCESS_KEY_ID=TU_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=TU_SECRET_ACCESS_KEY
+AWS_DEFAULT_REGION=us-east-1
+EOF
 
-1.  Read the data from the CSV file.
-      Perform necessary transformations, such as aggregating order information (e.g., calculating total sales per client).
-      Save the transformed data in a separate S3 bucket for later querying.
-      Data Storage & Querying:
+# 4. Desplegar infra con Terraform
+cd infra/terraform
+terraform init
+terraform apply -auto-approve
 
-2. After the ETL process, the transformed data should be saved in a queryable format in an S3 bucket.
+# Se mostrarán estos outputs:
+#   glue_job_name
+#   input_bucket
+#   output_bucket
+#   orders_api_invoke_url
 
-3. Set up AWS Athena to query this processed data, enabling the retrieval of meaningful insights such as:
-    Total orders per client
-    Total sales per product
-    Status of orders (e.g., delivered, broken, created)
-    Expose the Data via an API:
+# 5. Empaquetar y desplegar Lambda de la API
+cd ../../lambda
+./build.sh
+cd ../infra/terraform/api
+terraform init
+terraform apply -auto-approve
 
-4. Create a REST API using API Gateway that allows users to query the processed data.
-    The API should expose endpoints that can return specific reports based on the processed data, such as:
-    Orders for a specific client
-    Sales breakdown by product
-    Order status reports
-    Requirements & Best Practices:
+# 6. Subir ETL y datos a S3
+cd ../
+INPUT_BUCKET=$(terraform output -raw input_bucket)
+OUTPUT_BUCKET=$(terraform output -raw output_bucket)
+aws s3 cp ../../glue-scripts/transform.py s3://$INPUT_BUCKET/scripts/transform.py
+aws s3 cp ../../data/orders.csv      s3://$INPUT_BUCKET/orders.csv
 
-**Aditional Info**
+# 7. Ejecutar Glue Job
+cd ../
+JOB_NAME=$(terraform output -raw glue_job_name)
+aws glue start-job-run \
+  --job-name "$JOB_NAME" \
+  --arguments '{"--INPUT":"s3://'"$INPUT_BUCKET"'/orders.csv","--OUTPUT":"s3://'"$OUTPUT_BUCKET"'/parquet/","--TempDir":"s3://'"$INPUT_BUCKET"'/temp/"}'
 
-- The entire solution should follow a serverless architecture, ensuring scalability and minimal operational overhead.
-- Implement proper error handling and logging to ensure robustness, especially in the Lambda functions and API Gateway.
-- Write clean and modular code that is easy to understand and maintain.
+# 8. Verificar Parquet en S3
+aws s3 ls s3://$OUTPUT_BUCKET/parquet/status=created/
+aws s3 ls s3://$OUTPUT_BUCKET/parquet/status=delivered/
 
-**Bonus Points:**
-- Implement additional data validation, such as checking for malformed CSV rows or missing data.
-- Optimize the pipeline to handle large datasets efficiently (e.g., by using batch processing or partitioning in Athena).
-- Provide cost-optimization suggestions, ensuring minimal resource usage for maximum efficiency.
+# 9. Consulta en Athena
+#   - Configura ubicación de resultados en s3://$OUTPUT_BUCKET/athena-results/
+#   - Ejecuta en Athena:
+#
+#     CREATE DATABASE IF NOT EXISTS sdet_demo;
+#     CREATE EXTERNAL TABLE IF NOT EXISTS sdet_demo.orders_parquet (
+#       client_id INT, client_name STRING, order_id INT,
+#       product_id INT, product_description STRING,
+#       product_price DOUBLE, product_ccf INT,
+#       product_volume DOUBLE, point_of_sale_channel STRING
+#     )
+#     PARTITIONED BY (status STRING)
+#     STORED AS PARQUET
+#     LOCATION 's3://'"$OUTPUT_BUCKET"'/parquet/';
+#
+#     MSCK REPAIR TABLE sdet_demo.orders_parquet;
+#     SELECT * FROM sdet_demo.orders_parquet LIMIT 10;
 
-### **Additional Task: Data Modeling:**
+# 10. Probar API REST
+API_URL=$(terraform output -raw orders_api_invoke_url)
+curl "$API_URL/orders/1001"
 
-Now that you've built the ETL pipeline for processing orders, Duff Beer Inc. also wants to improve their data structure for analytics. Based on the processed dataset, create as many models as you can. These models should help the company analyze their data efficiently.
 
-You can include, but are not limited to, the following models:
+###  Evidencias (cd ../../Doc)
 
-- Clients Model: A model that tracks information about Duff Beer Inc.'s clients (e.g., client_id, client_name, point_of_sale_channel, etc.).
-- Products Model: A model that organizes data about the products Duff Beer Inc. sells (e.g., product_id, product_description, product_price, product_volume, etc.).
-- Orders Model: A model that keeps records of orders (e.g., order_id, client_id, product_id, status, etc.).
+- **Buckets S3**: orders.csv, transform.py y parquet/status=*
+- **Glue Job**: estado SUCCEEDED (CloudWatch Logs)
+- **Athena**: `SELECT * … LIMIT 10` muestra datos particionados
+- **API REST**: `GET /orders/1001` devuelve JSON con órdenes
 
-Feel free to extend or create additional models that you think would benefit Duff Beer Inc. in analyzing their sales and order data.
+
