@@ -2,11 +2,11 @@
 
 Este repositorio contiene la solución completa para la prueba técnica de Duff Beer Inc., que incluye:
 
-- Infraestructura como código (Terraform) para S3, IAM, Glue y API Gateway  
-- Script PySpark para AWS Glue (`transform.py`)  
-- Ejecución de ETL: CSV → Parquet particionado  
-- Consulta en Athena  
-- API REST en API Gateway + Lambda para exponer datos  
+- Infraestructura como código (Terraform) para S3, IAM, Glue y API Gateway
+- Script PySpark para AWS Glue (`transform.py`)
+- Ejecución de ETL: CSV → Parquet particionado
+- Consulta en Athena
+- API REST en API Gateway + Lambda para exponer datos
 - Pre-commit, tests y entorno Python modular
 
 ---
@@ -126,5 +126,3 @@ curl "$API_URL/orders/1001"
 - **Glue Job**: estado SUCCEEDED (CloudWatch Logs)
 - **Athena**: `SELECT * … LIMIT 10` muestra datos particionados
 - **API REST**: `GET /orders/1001` devuelve JSON con órdenes
-
-
