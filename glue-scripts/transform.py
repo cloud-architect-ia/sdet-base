@@ -2,7 +2,6 @@
 
 import logging
 import sys
-
 from awsglue.context import GlueContext
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
@@ -17,69 +16,105 @@ from pyspark.sql.types import (
 )
 
 # -------------------------------------------------------
-# Conf login
+# 1) Logging
 # -------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+)
 logger = logging.getLogger(__name__)
 
-
 # -------------------------------------------------------
-# def esquema
+# 2) Esquema con tipos estrictos
 # -------------------------------------------------------
 def get_schema() -> StructType:
-    return StructType(
-        [
-            StructField("client_id", IntegerType(), nullable=False),
-            StructField("client_name", StringType(), nullable=True),
-            StructField("order_id", IntegerType(), nullable=False),
-            StructField("product_id", IntegerType(), nullable=False),
-            StructField("product_description", StringType(), nullable=True),
-            StructField("product_price", DoubleType(), nullable=False),
-            StructField("product_ccf", IntegerType(), nullable=False),
-            StructField("product_volume", DoubleType(), nullable=False),
-            StructField("point_of_sale_channel", StringType(), nullable=True),
-            StructField("status", StringType(), nullable=True),
+    return StructType([
+        StructField("client_id", IntegerType(), nullable=False),
+        StructField("client_name", StringType(), nullable=False),
+        StructField("order_id", IntegerType(), nullable=False),
+        StructField("product_id", IntegerType(), nullable=False),
+        StructField("product_description", StringType(), nullable=False),
+        StructField("product_price", DoubleType(), nullable=False),
+        StructField("product_ccf", IntegerType(), nullable=False),
+        StructField("product_volume", DoubleType(), nullable=False),
+        StructField("point_of_sale_channel", StringType(), nullable=False),
+        StructField("status", StringType(), nullable=False),
+    ])
+
+VALID_CHANNELS = F.array(
+    F.lit("Retail"), F.lit("Online"), F.lit("B2B")
+)
+VALID_STATUSES = F.array(
+    F.lit("created"), F.lit("delivered"), F.lit("broken")
+)
+
+# -------------------------------------------------------
+# 3) Leer CSV y validar esquema
+# -------------------------------------------------------
+def read_input(spark: SparkSession, path: str, schema: StructType) -> DataFrame:
+    logger.info(f" Leyendo datos de entrada desde {path}")
+    df = (
+        spark.read
+             .option("header", "true")
+             .schema(schema)
+             .csv(path)
+    )
+
+    total = df.count()
+    non_null = df.dropna().count()
+    logger.info(f"   → Filas totales: {total}, sin nulls: {non_null}")
+    return df
+
+# -------------------------------------------------------
+# 4) Transformaciones con validaciones
+# -------------------------------------------------------
+def transform_data(df: DataFrame) -> DataFrame:
+    logger.info(" Aplicando transformaciones y validaciones")
+
+    df = df.dropna(
+        subset=[
+            "client_id", "order_id", "product_id",
+            "product_price", "product_ccf", "product_volume",
+            "point_of_sale_channel", "status"
         ]
     )
 
-
-# -------------------------------------------------------
-# read_input - Lee archivo csv
-# -------------------------------------------------------
-def read_input(spark: SparkSession, path: str, schema: StructType) -> DataFrame:
-    logger.info(f"Reading input data from {path}")
-    return spark.read.option("header", "true").schema(schema).csv(path)
-
-
-# -------------------------------------------------------
-# transform_data - realiza las transformaciones
-# -------------------------------------------------------
-def transform_data(df: DataFrame) -> DataFrame:
-    logger.info(
-        "Applying transformations: total_cost, unit_price_per_liter, filter broken"
-    )
-    # Evitar división por cero
     df = df.filter(F.col("product_volume") > 0)
 
-    return (
-        df.withColumn("total_cost", F.col("product_price") * F.col("product_ccf"))
+    df = df.filter(F.col("product_price") >= 0)
+
+    df = df.filter(F.array_contains(VALID_CHANNELS, F.col("point_of_sale_channel")))
+    df = df.filter(F.array_contains(VALID_STATUSES, F.col("status")))
+
+    df = (
+        df
+        .withColumn("total_cost", F.col("product_price") * F.col("product_ccf"))
         .withColumn(
-            "unit_price_per_liter", F.col("product_price") / F.col("product_volume")
+            "unit_price_per_liter",
+            F.col("product_price") / F.col("product_volume")
         )
-        .filter(F.col("status") != "broken")
     )
 
+    # 4.6 Filtrar filas “broken” por negocio
+    df = df.filter(F.col("status") != "broken")
+
+    # Log de filas finales
+    logger.info(f"   → Filas después de transform: {df.count()}")
+    return df
 
 # -------------------------------------------------------
-# Fwrite_output - Funcion de escritura
+# 5) Escribir parquet particionado
 # -------------------------------------------------------
 def write_output(df: DataFrame, path: str):
-    logger.info(f"Writing output data to {path} (partitioned by status)")
-    (df.write.mode("overwrite").partitionBy("status").parquet(path))
-
+    logger.info(f" Escribiendo resultado a {path} particionado por status")
+    (
+        df.write
+          .mode("overwrite")
+          .partitionBy("status")
+          .parquet(path)
+    )
 
 # -------------------------------------------------------
-# Orquestador
+# 6) Orquestación principal
 # -------------------------------------------------------
 def main():
     try:
@@ -92,18 +127,15 @@ def main():
         spark = glue.spark_session
 
         schema = get_schema()
-        df = read_input(spark, input_path, schema)
+        df_raw = read_input(spark, input_path, schema)
 
-        df_transformed = transform_data(df)
-
+        df_transformed = transform_data(df_raw)
         write_output(df_transformed, output_path)
 
-        logger.info("Job completed successfully")
-
+        logger.info("Job completado con éxito")
     except Exception:
-        logger.error("Job failed with exception", exc_info=True)
+        logger.exception(" Job falló con excepción")
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
